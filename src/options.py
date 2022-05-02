@@ -42,12 +42,18 @@ def args_parser():
                         help="Whether use max pooling rather than \
                         strided convolutions")
 
+    # kd arguments
+    parser.add_argument('--T', type=float, default=1, help="temperature paramater \
+                        of kd")
+    parser.add_argument('--alpha', type=float, default=0.5, help="weight of \
+                        of kl divergence")
+
     # other arguments
     parser.add_argument('--dataset', type=str, default='mnist', help="name \
                         of dataset")
     parser.add_argument('--num_classes', type=int, default=10, help="number \
                         of classes")
-    parser.add_argument('--gpu', default=None, help="To use cuda, set \
+    parser.add_argument('--gpu_id', default=None, type=int, help="To use cuda, set \
                         to a specific GPU ID. Default set to use CPU.")
     parser.add_argument('--optimizer', type=str, default='sgd', help="type \
                         of optimizer")
