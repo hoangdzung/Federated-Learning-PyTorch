@@ -8,6 +8,22 @@ from torchvision import datasets, transforms
 from sampling import mnist_iid, mnist_noniid, mnist_noniid_unequal
 from sampling import cifar_iid, cifar_noniid
 
+def masking(target_tensor, labels):
+    """
+    Create a mask tensor, 1 for selected label, 0 otherwise
+    params:
+        target_tensor: tensor of labels
+        labels: list of labels we want to sample 
+    """
+    mask = None
+    for label in labels:
+        if mask is None:
+            mask = tensor == label
+        else:
+            mask = mask | (tensor==label)
+    
+    return mask
+
 
 def get_dataset(args):
     """ Returns train and test datasets and a user group which is a dict where
@@ -26,6 +42,14 @@ def get_dataset(args):
 
         test_dataset = datasets.CIFAR10(data_dir, train=False, download=True,
                                       transform=apply_transform)
+                                      
+        if len(args.train_labels) >0 :
+            train_indices = masking(train_dataset.targets, args.train_labels)
+            train_dataset.data, train_dataset.targets = train_dataset.data[train_indices], train_dataset.targets[train_indices]
+
+        if len(args.test_labels) >0 :
+            test_indices = masking(test_dataset.targets, args.test_labels)
+            test_dataset.data, test_dataset.targets = test_dataset.data[test_indices], test_dataset.targets[test_indices]
 
         # sample training data amongst users
         if args.iid:
@@ -52,9 +76,15 @@ def get_dataset(args):
 
         train_dataset = datasets.MNIST(data_dir, train=True, download=True,
                                        transform=apply_transform)
+        if len(args.train_labels) >0 :
+            train_indices = masking(train_dataset.targets, args.train_labels)
+            train_dataset.data, train_dataset.targets = train_dataset.data[train_indices], train_dataset.targets[train_indices]
 
         test_dataset = datasets.MNIST(data_dir, train=False, download=True,
                                       transform=apply_transform)
+        if len(args.test_labels) >0 :
+            test_indices = masking(test_dataset.targets, args.test_labels)
+            test_dataset.data, test_dataset.targets = test_dataset.data[test_indices], test_dataset.targets[test_indices]
 
         # sample training data amongst users
         if args.iid:
