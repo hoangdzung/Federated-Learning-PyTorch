@@ -41,13 +41,10 @@ if __name__ == '__main__':
         # Convolutional neural netork
         if args.dataset == 'mnist':
             global_model = CNNMnist(args=args)
-            user_models = [CNNMnist(args=args) for _ in range(args.num_users)]
         elif args.dataset == 'fmnist':
             global_model = CNNFashion_Mnist(args=args)
-            user_models = [CNNFashion_Mnist(args=args) for _ in range(args.num_users)]
         elif args.dataset == 'cifar':
             global_model = CNNCifar(args=args)
-            user_models = [CNNCifar(args=args) for _ in range(args.num_users)]
 
     elif args.model == 'mlp':
         # Multi-layer preceptron
@@ -57,8 +54,6 @@ if __name__ == '__main__':
             len_in *= x
             global_model = MLP(dim_in=len_in, dim_hidden=64,
                                dim_out=args.num_classes)
-            user_models = [MLP(dim_in=len_in, dim_hidden=64,
-                               dim_out=args.num_classes) for _ in range(args.num_users)]
     else:
         exit('Error: unrecognized model')
 
@@ -69,9 +64,6 @@ if __name__ == '__main__':
 
     # copy weights
     global_weights = global_model.state_dict()
-    
-    for user_model in user_models:
-        user_model.load_state_dict(global_weights) 
 
     # Training
     train_loss, train_accuracy = [], []
@@ -100,8 +92,7 @@ if __name__ == '__main__':
             local_model = LocalUpdate(args=args, dataset=train_dataset,
                                       idxs=user_groups[idx], logger=logger)
 
-            w, loss = local_model.update_weights_kd(user_model=user_models[idx],
-                global_model=copy.deepcopy(global_model), global_round=epoch, T=args.T, alpha=args.alpha)
+            w, loss = local_model.update_weights_kd(global_model=copy.deepcopy(global_model), global_round=epoch, T=args.T, alpha=args.alpha, kl_dist=args.kl_dist)
             local_weights.append(copy.deepcopy(w))
             local_losses.append(copy.deepcopy(loss))
 
@@ -121,8 +112,8 @@ if __name__ == '__main__':
         for idx in range(args.num_users):
             local_model = LocalUpdate(args=args, dataset=train_dataset,
                                       idxs=user_groups[idx], logger=logger)
-            # acc, loss = local_model.inference(model=global_model)
-            acc, loss = local_model.inference(model=user_models[idx])
+            acc, loss = local_model.inference(model=global_model)
+            # acc, loss = local_model.inference(model=user_models[idx])
             list_acc.append(acc)
             list_loss.append(loss)
         train_accuracy.append(sum(list_acc)/len(list_acc))
