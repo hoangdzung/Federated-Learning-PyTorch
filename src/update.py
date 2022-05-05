@@ -6,7 +6,91 @@ import torch
 from torch import nn
 from torch.utils.data import DataLoader, Dataset
 import torch.nn.functional as F
+import copy 
 
+#### KL
+def KL_divergence(teacher_batch_input, student_batch_input):
+    """
+    Compute the KL divergence of 2 batches of layers
+    Args:
+        teacher_batch_input: Size N x d
+        student_batch_input: Size N x c
+    
+    Method: Kernel Density Estimation (KDE)
+    Kernel: Gaussian
+    Author: Nguyen Nang Hung
+    """
+    batch_student, _ = student_batch_input.shape
+    batch_teacher, _ = teacher_batch_input.shape
+    
+    assert batch_teacher == batch_student, "Unmatched batch size"
+    
+    teacher_batch_input = teacher_batch_input.unsqueeze(1)
+    student_batch_input = student_batch_input.unsqueeze(1)
+    
+    sub_s = student_batch_input - student_batch_input.transpose(0,1)
+    sub_s_norm = torch.norm(sub_s, dim=2)
+    sub_s_norm = sub_s_norm[sub_s_norm!=0].view(batch_student,-1)
+    std_s = torch.std(sub_s_norm)
+    mean_s = torch.mean(sub_s_norm)
+    kernel_mtx_s = torch.pow(sub_s_norm - mean_s, 2) / (torch.pow(std_s, 2) + 0.001)
+    kernel_mtx_s = torch.exp(-1/2 * kernel_mtx_s)
+    kernel_mtx_s = kernel_mtx_s/torch.sum(kernel_mtx_s, dim=1, keepdim=True)
+    
+    sub_t = teacher_batch_input - teacher_batch_input.transpose(0,1)
+    sub_t_norm = torch.norm(sub_t, dim=2)
+    sub_t_norm = sub_t_norm[sub_t_norm!=0].view(batch_teacher,-1)
+    std_t = torch.std(sub_t_norm)
+    mean_t = torch.mean(sub_t_norm)
+    kernel_mtx_t = torch.pow(sub_t_norm - mean_t, 2) / (torch.pow(std_t, 2) + 0.001)
+    kernel_mtx_t = torch.exp(-1/2 * kernel_mtx_t)
+    kernel_mtx_t = kernel_mtx_t/torch.sum(kernel_mtx_t, dim=1, keepdim=True)
+    
+    kl = torch.sum(kernel_mtx_t * torch.log(kernel_mtx_t/kernel_mtx_s))
+    return kl
+
+#### FedProx 
+def difference_models_norm_2(params1, params2):
+    """Return the norm 2 difference between the two model parameters
+    """
+    
+    norm=sum([torch.sum((params1[i]-params2[i])**2) 
+        for i in range(len(params1))])
+    
+    return norm
+
+#### Uncertainty
+def relu_evidence(logits):
+    return F.relu(logits)
+
+def KL(alpha,K=10):
+    beta=torch.ones(1,K)
+    S_alpha = torch.sum(alpha,dim=1,keepdim=True)
+    S_beta = torch.sum(beta,dim=1,keepdim=True)
+    lnB = torch.lgamma(S_alpha) - torch.sum(torch.lgamma(alpha),dim=1,keepdim=True)
+    lnB_uni = torch.sum(torch.lgamma(beta),dim=1,keepdim=True) - torch.lgamma(S_beta)
+    
+    dg0 = torch.digamma(S_alpha)
+    dg1 = torch.digamma(alpha)
+    
+    kl = torch.sum((alpha - beta)*(dg1-dg0),dim=1,keepdim=True) + lnB + lnB_uni
+    return kl
+
+def mse_loss(labels, alpha, K, global_step, annealing_step): 
+    p = F.one_hot(labels, num_classes=K)
+
+    S = torch.sum(alpha, dim=1, keepdim=True) 
+    E = alpha - 1
+    m = alpha / S
+    
+    A = torch.sum((p-m)**2, dim=1, keepdim=True) 
+    B = torch.sum(alpha*(S-alpha)/(S*S*(S+1)), axis=1, keepdim=True) 
+    
+    annealing_coef = min(1.0,global_step/annealing_step)
+    
+    alp = E*(1-p) + 1 
+    C =  annealing_coef * KL(alp,K)
+    return (A + B) + C
 
 class DatasetSplit(Dataset):
     """An abstract Dataset class wrapped around Pytorch Dataset class.
@@ -53,7 +137,8 @@ class LocalUpdate(object):
                                 batch_size=int(len(idxs_test)/10), shuffle=False)
         return trainloader, validloader, testloader
 
-    def update_weights(self, model, global_round):
+    def update_weights(self, model, global_round, mu=0, uncertainty=False):
+        global_params = copy.deepcopy(list(model.parameters()))
         # Set mode to train model
         model.train()
         epoch_loss = []
@@ -72,9 +157,21 @@ class LocalUpdate(object):
                 images, labels = images.to(self.device), labels.to(self.device)
 
                 model.zero_grad()
-                logits = model(images)
-                loss = self.criterion(logits, labels)
-                loss.backward()
+                _, logits = model(images)
+                if uncertainty:
+                    evidence = relu_evidence(logits)
+                    alpha = evidence + 1
+                    K=logits.shape[-1]
+                    u = K / torch.sum(alpha, dim=1, keepdim=True) #uncertainty
+                    prob = alpha/torch.sum(alpha, 1, keepdim=True) 
+                    
+                    loss = torch.mean(mse_loss(labels, alpha, K, iter*len(self.trainloader)+batch_idx, 10*len(self.trainloader)))
+
+                else:                    
+                    loss = self.criterion(logits, labels)
+                
+                loss_ = loss + mu *difference_models_norm_2(list(model.parameters()), global_params)
+                loss_.backward()
                 optimizer.step()
 
                 if self.args.verbose and (batch_idx % 10 == 0):
@@ -88,10 +185,10 @@ class LocalUpdate(object):
 
         return model.state_dict(), sum(epoch_loss) / len(epoch_loss)
 
-    def update_weights_kd(self, user_model, global_model, global_round, T=1, alpha=0.2):
-        # Set mode to train model
-        user_model.train()
+    def update_weights_kd(self, global_model, global_round, T=1, alpha=0.2, kl_dist=True):
+        user_model = copy.deepcopy(global_model)
         global_model.eval()
+        user_model.train()
         epoch_loss = []
 
         # Set optimizer for the local updates
@@ -108,11 +205,14 @@ class LocalUpdate(object):
                 images, labels = images.to(self.device), labels.to(self.device)
 
                 user_model.zero_grad()
-                logits = user_model(images)
+                embs, logits = user_model(images)
                 loss1 = self.criterion(logits, labels)
-                global_logits = global_model(images)
+                global_embs, global_logits = global_model(images)
                 
-                loss2 = nn.KLDivLoss()(F.log_softmax(logits/T, dim=1),
+                if kl_dist:
+                    loss2 = KL_divergence(global_embs, embs)
+                else:
+                    loss2 = nn.KLDivLoss()(F.log_softmax(logits/T, dim=1),
                              F.softmax(global_logits/T, dim=1)) * (T * T)
 
                 loss = (1-alpha)*loss1 + alpha*loss2
@@ -130,20 +230,27 @@ class LocalUpdate(object):
 
         return user_model.state_dict(), sum(epoch_loss) / len(epoch_loss)
 
-    def inference(self, model):
+    def inference(self, model, uncertainty):
         """ Returns the inference accuracy and loss.
         """
 
         model.eval()
         loss, total, correct = 0.0, 0.0, 0.0
-
+        us = []
         for batch_idx, (images, labels) in enumerate(self.testloader):
             images, labels = images.to(self.device), labels.to(self.device)
 
             # Inference
-            outputs = model(images)
-            batch_loss = self.criterion(outputs, labels)
-            loss += batch_loss.item()
+            _,  outputs = model(images)
+            if uncertainty:
+                evidence = relu_evidence(outputs)
+                alpha = evidence + 1
+                K=outputs.shape[-1]
+                u = K / torch.sum(alpha, dim=1, keepdim=True) #uncertainty
+                us += u.reshape((-1,)).detach().cpu().numpy().tolist()
+            else:
+                batch_loss = self.criterion(outputs, labels)
+                loss += batch_loss.item()
 
             # Prediction
             _, pred_labels = torch.max(outputs, 1)
@@ -152,16 +259,20 @@ class LocalUpdate(object):
             total += len(labels)
 
         accuracy = correct/total
-        return accuracy, loss
+
+        if uncertainty:
+            return accuracy, sum(us)/len(us)
+        else:
+            return accuracy, loss
 
 
-def test_inference(args, model, test_dataset):
+def test_inference(args, model, test_dataset, uncertainty):
     """ Returns the test accuracy and loss.
     """
 
     model.eval()
     loss, total, correct = 0.0, 0.0, 0.0
-
+    us = []
     device = 'cuda' if args.gpu_id else 'cpu'
     criterion = nn.NLLLoss().to(device)
     testloader = DataLoader(test_dataset, batch_size=128,
@@ -172,8 +283,15 @@ def test_inference(args, model, test_dataset):
 
         # Inference
         outputs = model(images)
-        batch_loss = criterion(outputs, labels)
-        loss += batch_loss.item()
+        if uncertainty:
+            evidence = relu_evidence(outputs)
+            alpha = evidence + 1
+            K=outputs.shape[-1]
+            u = K / torch.sum(alpha, dim=1, keepdim=True) #uncertainty
+            us += u.reshape((-1,)).detach().cpu().numpy().tolist()
+        else:
+            batch_loss = self.criterion(outputs, labels)
+            loss += batch_loss.item()
 
         # Prediction
         _, pred_labels = torch.max(outputs, 1)
@@ -182,4 +300,7 @@ def test_inference(args, model, test_dataset):
         total += len(labels)
 
     accuracy = correct/total
-    return accuracy, loss
+    if uncertainty:
+        return accuracy, sum(us)/len(us)
+    else:
+        return accuracy, loss
