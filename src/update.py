@@ -292,7 +292,7 @@ def test_inference(args, model, test_dataset, uncertainty):
             u = K / torch.sum(alpha, dim=1, keepdim=True) #uncertainty
             us += u.reshape((-1,)).detach().cpu().numpy().tolist()
         else:
-            batch_loss = self.criterion(outputs, labels)
+            batch_loss = criterion(outputs, labels)
             loss += batch_loss.item()
 
         # Prediction
