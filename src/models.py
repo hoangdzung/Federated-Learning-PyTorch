@@ -18,10 +18,10 @@ class MLP(nn.Module):
     def forward(self, x):
         x = x.view(-1, x.shape[1]*x.shape[-2]*x.shape[-1])
         x = self.layer_input(x)
-        x = self.dropout(x)
-        x = self.relu(x)
+        emb = self.dropout(x)
+        x = self.relu(emb)
         x = self.layer_hidden(x)
-        return self.softmax(x)
+        return emb, x
 
 
 class CNNMnist(nn.Module):
@@ -37,11 +37,12 @@ class CNNMnist(nn.Module):
         x = F.relu(F.max_pool2d(self.conv1(x), 2))
         x = F.relu(F.max_pool2d(self.conv2_drop(self.conv2(x)), 2))
         x = x.view(-1, x.shape[1]*x.shape[2]*x.shape[3])
-        x = F.relu(self.fc1(x))
+        emb = self.fc1(x)
+        x = F.relu(emb)
         x = F.dropout(x, training=self.training)
         x = self.fc2(x)
         # return F.log_softmax(x, dim=1)
-        return x
+        return emb, x
 
 class CNNFashion_Mnist(nn.Module):
     def __init__(self, args):
@@ -61,9 +62,9 @@ class CNNFashion_Mnist(nn.Module):
     def forward(self, x):
         out = self.layer1(x)
         out = self.layer2(out)
-        out = out.view(out.size(0), -1)
+        emb = out.view(out.size(0), -1)
         out = self.fc(out)
-        return out
+        return emb, out
 
 
 class CNNCifar(nn.Module):
@@ -81,9 +82,10 @@ class CNNCifar(nn.Module):
         x = self.pool(F.relu(self.conv2(x)))
         x = x.view(-1, 16 * 5 * 5)
         x = F.relu(self.fc1(x))
-        x = F.relu(self.fc2(x))
+        emb = self.fc2(x)
+        x = F.relu(emb)
         x = self.fc3(x)
-        return F.log_softmax(x, dim=1)
+        return emb, x
 
 class modelC(nn.Module):
     def __init__(self, input_size, n_classes=10, **kwargs):
@@ -111,10 +113,12 @@ class modelC(nn.Module):
         conv6_out = F.relu(self.conv6(conv5_out))
         conv6_out_drop = F.dropout(conv6_out, .5)
         conv7_out = F.relu(self.conv7(conv6_out_drop))
-        conv8_out = F.relu(self.conv8(conv7_out))
+        x = self.conv8(conv7_out)
+        emb = x.reshape((-1,))
+        conv8_out = F.relu(x)
 
         class_out = F.relu(self.class_conv(conv8_out))
         pool_out = F.adaptive_avg_pool2d(class_out, 1)
         pool_out.squeeze_(-1)
         pool_out.squeeze_(-1)
-        return pool_out
+        return emb, pool_out
