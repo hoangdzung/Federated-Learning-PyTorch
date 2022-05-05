@@ -11,15 +11,16 @@ from torch.utils.data import DataLoader
 
 from utils import get_dataset
 from options import args_parser
-from update import test_inference
+from update import test_inference, mse_loss, relu_evidence
 from models import MLP, CNNMnist, CNNFashion_Mnist, CNNCifar
 
 
 if __name__ == '__main__':
     args = args_parser()
-    if args.gpu:
-        torch.cuda.set_device(args.gpu)
-    device = 'cuda' if args.gpu else 'cpu'
+    # if args.gpu_id:
+    #     torch.cuda.set_device(args.gpu_id)
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
 
     # load datasets
     train_dataset, test_dataset, _ = get_dataset(args)
@@ -70,7 +71,18 @@ if __name__ == '__main__':
 
             optimizer.zero_grad()
             outputs = global_model(images)
-            loss = criterion(outputs, labels)
+            if args.uncertainty:
+                evidence = relu_evidence(outputs)
+                alpha = evidence + 1
+                K=outputs.shape[-1]
+                u = K / torch.sum(alpha, dim=1, keepdim=True) #uncertainty
+                prob = alpha/torch.sum(alpha, 1, keepdim=True) 
+                
+                loss = torch.mean(mse_loss(labels, alpha, K, epoch*len(trainloader)+batch_idx, 10*len(trainloader)))
+
+            else:                    
+                loss = criterion(outputs, labels)
+                
             loss.backward()
             optimizer.step()
 
@@ -85,14 +97,15 @@ if __name__ == '__main__':
         epoch_loss.append(loss_avg)
 
     # Plot loss
-    plt.figure()
-    plt.plot(range(len(epoch_loss)), epoch_loss)
-    plt.xlabel('epochs')
-    plt.ylabel('Train loss')
-    plt.savefig('../save/nn_{}_{}_{}.png'.format(args.dataset, args.model,
-                                                 args.epochs))
+    # plt.figure()
+    # plt.plot(range(len(epoch_loss)), epoch_loss)
+    # plt.xlabel('epochs')
+    # plt.ylabel('Train loss')
+    # plt.savefig('../save/nn_{}_{}_{}.png'.format(args.dataset, args.model,
+    #                                              args.epochs))
 
     # testing
-    test_acc, test_loss = test_inference(args, global_model, test_dataset)
+    test_acc, test_loss = test_inference(args, global_model, test_dataset, args.uncertainty)
     print('Test on', len(test_dataset), 'samples')
     print("Test Accuracy: {:.2f}%".format(100*test_acc))
+    print("Test loss: {:.2f}%".format(test_loss))
