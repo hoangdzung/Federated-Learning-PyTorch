@@ -112,7 +112,7 @@ if __name__ == '__main__':
         for idx in range(args.num_users):
             local_model = LocalUpdate(args=args, dataset=train_dataset,
                                       idxs=user_groups[idx], logger=logger)
-            acc, loss = local_model.inference(model=global_model)
+            acc, loss = local_model.inference(model=global_model, uncertainty=args.uncertainty)
             # acc, loss = local_model.inference(model=user_models[idx])
             list_acc.append(acc)
             list_loss.append(loss)
