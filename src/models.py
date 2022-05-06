@@ -27,19 +27,19 @@ class MLP(nn.Module):
 class BCNNMnist(nn.Module):
     def __init__(self, args):
         super(BCNNMnist, self).__init__()
-        self.cnn = nn.Sequential([
+        self.cnn = nn.Sequential(
             nn.Conv2d(args.num_channels, 32, kernel_size=5),
             nn.ReLU(),
             nn.MaxPool2d(2),
             nn.Conv2d(32,64,kernel_size=5),
             nn.ReLU(),
             nn.MaxPool2d(2),
-        ])
-        self.mlp = nn.Sequential([
+        )
+        self.mlp = nn.Sequential(
             nn.Linear(1024, 512),
             nn.ReLU(),
             nn.Linear(512, args.num_classes)
-        ])
+        )
 
     def forward(self, x):
         x = self.cnn(x)
