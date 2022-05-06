@@ -27,6 +27,9 @@ if __name__ == '__main__':
     logger = SummaryWriter('../logs')
 
     args = args_parser()
+    torch.manual_seed(args.seed)
+    torch.cuda.manual_seed(args.seed)
+    np.random.seed(args.seed)
     exp_details(args)
 
     # if args.gpu_id:
