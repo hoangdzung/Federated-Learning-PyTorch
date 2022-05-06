@@ -37,7 +37,7 @@ class BCNNMnist(nn.Module):
         ])
         self.mlp = nn.Sequential([
             nn.Linear(1024, 512),
-            nn.ReLU()
+            nn.ReLU(),
             nn.Linear(512, args.num_classes)
         ])
 
