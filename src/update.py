@@ -284,7 +284,7 @@ def test_inference(args, model, test_dataset, uncertainty):
         images, labels = images.to(device), labels.to(device)
 
         # Inference
-        outputs = model(images)
+        _, outputs = model(images)
         if uncertainty:
             evidence = relu_evidence(outputs)
             alpha = evidence + 1
