@@ -24,6 +24,29 @@ class MLP(nn.Module):
         return emb, x
 
 
+class BCNNMnist(nn.Module):
+    def __init__(self, args):
+        super(BCNNMnist, self).__init__()
+        self.cnn = nn.Sequential([
+            nn.Conv2d(args.num_channels, 32, kernel_size=5)
+            nn.ReLU(),
+            nn.MaxPool2d(2),
+            nn.Conv2d(32,64,kernel_size=5),
+            nn.ReLU(),
+            nn.MaxPool2d(2),
+        ])
+        self.mlp = nn.Sequential([
+            nn.Linear(1024, 512),
+            nn.ReLU()
+            nn.Linear(512, args.num_classes)
+        ])
+
+    def forward(self, x):
+        x = self.cnn(x)
+        emb = x.reshape((x.shape[0],-1))
+        x = self.mlp(emb)
+        return emb, x
+
 class CNNMnist(nn.Module):
     def __init__(self, args):
         super(CNNMnist, self).__init__()
@@ -114,7 +137,7 @@ class modelC(nn.Module):
         conv6_out_drop = F.dropout(conv6_out, .5)
         conv7_out = F.relu(self.conv7(conv6_out_drop))
         x = self.conv8(conv7_out)
-        emb = x.reshape((-1,))
+        emb = x.reshape((x.shape[0],-1))
         conv8_out = F.relu(x)
 
         class_out = F.relu(self.class_conv(conv8_out))
