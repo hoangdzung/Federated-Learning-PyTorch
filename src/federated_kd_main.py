@@ -15,7 +15,7 @@ from tensorboardX import SummaryWriter
 
 from options import args_parser
 from update import LocalUpdate, test_inference
-from models import MLP, CNNMnist, CNNFashion_Mnist, CNNCifar
+from models import MLP, CNNMnist, CNNFashion_Mnist, CNNCifar, BCNNMnist
 from utils import get_dataset, average_weights, exp_details
 
 
@@ -40,9 +40,11 @@ if __name__ == '__main__':
     if args.model == 'cnn':
         # Convolutional neural netork
         if args.dataset == 'mnist':
-            global_model = CNNMnist(args=args)
+            # global_model = CNNMnist(args=args)
+            global_model = BCNNMnist(args=args)
         elif args.dataset == 'fmnist':
-            global_model = CNNFashion_Mnist(args=args)
+            # global_model = CNNFashion_Mnist(args=args)
+            global_model = BCNNMnist(args=args)
         elif args.dataset == 'cifar':
             global_model = CNNCifar(args=args)
 
@@ -132,9 +134,9 @@ if __name__ == '__main__':
     print("|---- Test Accuracy: {:.2f}%".format(100*test_acc))
 
     # Saving the objects train_loss and train_accuracy:
-    file_name = '../save/objects/{}_{}_{}_C[{}]_iid[{}]_E[{}]_B[{}].pkl'.\
+    file_name = '../save/objects/{}_{}_{}_C[{}]_iid[{}]_E[{}]_B[{}]_lr[{}]_alpha[{}]_mu[{}]_T[{}]_kldist[{}].pkl'.\
         format(args.dataset, args.model, args.epochs, args.frac, args.iid,
-               args.local_ep, args.local_bs)
+               args.local_ep, args.local_bs, args.lr, args.alpha, args.mu, args.T, args.kl_dist)
 
     with open(file_name, 'wb') as f:
         pickle.dump([train_loss, train_accuracy], f)

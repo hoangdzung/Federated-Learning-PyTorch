@@ -40,9 +40,11 @@ if __name__ == '__main__':
     if args.model == 'cnn':
         # Convolutional neural netork
         if args.dataset == 'mnist':
-            global_model = CNNMnist(args=args)
+            # global_model = CNNMnist(args=args)
+            global_model = BCNNMnist(args=args)
         elif args.dataset == 'fmnist':
-            global_model = CNNFashion_Mnist(args=args)
+            # global_model = CNNFashion_Mnist(args=args)
+            global_model = BCNNMnist(args=args)
         elif args.dataset == 'cifar':
             global_model = CNNCifar(args=args)
 
