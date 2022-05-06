@@ -28,7 +28,7 @@ class BCNNMnist(nn.Module):
     def __init__(self, args):
         super(BCNNMnist, self).__init__()
         self.cnn = nn.Sequential([
-            nn.Conv2d(args.num_channels, 32, kernel_size=5)
+            nn.Conv2d(args.num_channels, 32, kernel_size=5),
             nn.ReLU(),
             nn.MaxPool2d(2),
             nn.Conv2d(32,64,kernel_size=5),
