@@ -97,7 +97,7 @@ if __name__ == '__main__':
             local_model = LocalUpdate(args=args, dataset=train_dataset,
                                       idxs=user_groups[idx], logger=logger)
 
-            w, loss = local_model.update_weights_kd(global_model=copy.deepcopy(global_model), global_round=epoch, T=args.T, alpha=args.alpha, kl_dist=args.kl_dist)
+            w, loss = local_model.update_weights_kd(global_model=copy.deepcopy(global_model), global_round=epoch, T=args.T, alpha=args.alpha, kl=args.kl, reduction=args.kl_reduction)
             local_weights.append(copy.deepcopy(w))
             local_losses.append(copy.deepcopy(loss))
 
