@@ -214,15 +214,15 @@ class LocalUpdate(object):
                 global_embs, global_logits = global_model(images)
                 
                 if kl=='kl_comb':
-                    loss2 = KL_divergence(global_embs, embs, reduction) + nn.KLDivLoss()(F.log_softmax(logits/T, dim=1),
-                             F.softmax(global_logits/T, dim=1), reduction=reduction) * (T * T)
+                    loss2 = KL_divergence(global_embs, embs, reduction) + nn.KLDivLoss(reduction=reduction)(F.log_softmax(logits/T, dim=1),
+                             F.softmax(global_logits/T, dim=1)) * (T * T)
                 elif kl=='kl_dist':
                     loss2 = KL_divergence(global_embs, embs, reduction)
                 else:
-                    loss2 = nn.KLDivLoss()(F.log_softmax(logits/T, dim=1),
-                             F.softmax(global_logits/T, dim=1), reduction=reduction) * (T * T)
+                    loss2 = nn.KLDivLoss(reduction=reduction)(F.log_softmax(logits/T, dim=1),
+                             F.softmax(global_logits/T, dim=1)) * (T * T)
 
-                loss = (1-alpha)*loss1 + alpha*loss2
+                loss = loss1 + alpha*loss2
                 loss.backward()
                 optimizer.step()
 
