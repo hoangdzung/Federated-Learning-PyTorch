@@ -50,7 +50,8 @@ def args_parser():
     parser.add_argument('--mu', type=float, default=0, help="mu of \
                         fedprox")
     parser.add_argument('--uncertainty', action='store_true')
-    parser.add_argument('--kl_dist', action='store_true')
+    parser.add_argument('--kl')
+    parser.add_argument('--kl_reduction')
 
     # other arguments
     parser.add_argument('--dataset', type=str, default='mnist', help="name \

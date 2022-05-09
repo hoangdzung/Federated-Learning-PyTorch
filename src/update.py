@@ -9,7 +9,7 @@ import torch.nn.functional as F
 import copy 
 
 #### KL
-def KL_divergence(teacher_batch_input, student_batch_input):
+def KL_divergence(teacher_batch_input, student_batch_input, reduction='sum'):
     """
     Compute the KL divergence of 2 batches of layers
     Args:
@@ -45,8 +45,11 @@ def KL_divergence(teacher_batch_input, student_batch_input):
     kernel_mtx_t = torch.pow(sub_t_norm - mean_t, 2) / (torch.pow(std_t, 2) + 0.001)
     kernel_mtx_t = torch.exp(-1/2 * kernel_mtx_t)
     kernel_mtx_t = kernel_mtx_t/torch.sum(kernel_mtx_t, dim=1, keepdim=True)
-    
-    kl = torch.sum(kernel_mtx_t * torch.log(kernel_mtx_t/kernel_mtx_s))
+    if reduction =='sum':
+        kl = torch.sum(kernel_mtx_t * torch.log(kernel_mtx_t/kernel_mtx_s))
+    elif reduction=='mean':
+        kl = torch.mean(kernel_mtx_t * torch.log(kernel_mtx_t/kernel_mtx_s))
+
     return kl
 
 #### FedProx 
@@ -186,7 +189,7 @@ class LocalUpdate(object):
 
         return model.state_dict(), sum(epoch_loss) / len(epoch_loss)
 
-    def update_weights_kd(self, global_model, global_round, T=1, alpha=0.2, kl_dist=True):
+    def update_weights_kd(self, global_model, global_round, T=1, alpha=0.2, kl='kl', reduction='sum'):
         user_model = copy.deepcopy(global_model)
         global_model.eval()
         user_model.train()
@@ -210,11 +213,14 @@ class LocalUpdate(object):
                 loss1 = self.criterion(logits, labels)
                 global_embs, global_logits = global_model(images)
                 
-                if kl_dist:
-                    loss2 = KL_divergence(global_embs, embs)
+                if kl=='kl_comb':
+                    loss2 = KL_divergence(global_embs, embs, reduction) + nn.KLDivLoss()(F.log_softmax(logits/T, dim=1),
+                             F.softmax(global_logits/T, dim=1), reduction=reduction) * (T * T)
+                elif kl=='kl_dist':
+                    loss2 = KL_divergence(global_embs, embs, reduction)
                 else:
                     loss2 = nn.KLDivLoss()(F.log_softmax(logits/T, dim=1),
-                             F.softmax(global_logits/T, dim=1)) * (T * T)
+                             F.softmax(global_logits/T, dim=1), reduction=reduction) * (T * T)
 
                 loss = (1-alpha)*loss1 + alpha*loss2
                 loss.backward()
