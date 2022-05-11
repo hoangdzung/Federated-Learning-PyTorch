@@ -17,16 +17,15 @@ from options import args_parser
 from update import LocalUpdate, test_inference
 from models import MLP, CNNMnist, CNNFashion_Mnist, CNNCifar, BCNNMnist
 from utils import get_dataset, average_weights, exp_details
+from line_profiler import LineProfiler
 
-
-if __name__ == '__main__':
+def main(args):
     start_time = time.time()
 
     # define paths
     path_project = os.path.abspath('..')
     logger = SummaryWriter('../logs')
 
-    args = args_parser()
     torch.manual_seed(args.seed)
     torch.cuda.manual_seed(args.seed)
     np.random.seed(args.seed)
@@ -88,10 +87,12 @@ if __name__ == '__main__':
         for idx in idxs_users:
             local_model = LocalUpdate(args=args, dataset=train_dataset,
                                       idxs=user_groups[idx], logger=logger)
+            copied_model = copy.deepcopy(global_model)
             w, loss = local_model.update_weights(
-                model=copy.deepcopy(global_model), global_round=epoch, mu=args.mu, uncertainty=args.uncertainty)
-            local_weights.append(copy.deepcopy(w))
-            local_losses.append(copy.deepcopy(loss))
+                model=copied_model, global_round=epoch, mu=args.mu, uncertainty=args.uncertainty)
+            copied_w, copied_loss = copy.deepcopy(w), copy.deepcopy(loss)
+            local_weights.append(copied_w)
+            local_losses.append(copied_loss)
 
         # update global weights
         global_weights = average_weights(local_weights)
@@ -161,3 +162,13 @@ if __name__ == '__main__':
     # plt.savefig('../save/fed_{}_{}_{}_C[{}]_iid[{}]_E[{}]_B[{}]_acc.png'.
     #             format(args.dataset, args.model, args.epochs, args.frac,
     #                    args.iid, args.local_ep, args.local_bs))
+
+if __name__ == '__main__':
+    args = args_parser()
+    if args.profiler:
+        lp = LineProfiler()
+        lp_wrapper = lp(main)
+        lp_wrapper(args)
+        lp.print_stats()
+    else:
+        main(args)
